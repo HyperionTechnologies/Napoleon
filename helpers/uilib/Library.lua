@@ -6550,7 +6550,7 @@ function Library:CreateWindow(...)
     end
 
     if WindowInfo.Size == UDim2.fromOffset(0, 0) then
-        WindowInfo.Size = if Library.IsMobile then UDim2.fromOffset(550, math.clamp(ViewportSize.Y - 35, 200, 600)) else UDim2.fromOffset(550, 600)
+        WindowInfo.Size = if Library.IsMobile then UDim2.fromOffset(550, math.clamp(ViewportSize.Y - 35, 200, 600)) else UDim2.fromOffset(740, 630)
     end
 
     Library.NotifySide = WindowInfo.NotifySide
@@ -6634,13 +6634,10 @@ function Library:CreateWindow(...)
         BackgroundColor3 = "BackgroundColor";
     })
 
-    -- The tabs share the width equally (see SizeTabButtons), so the canvas is the frame
-    local TabArea = Library:Create("ScrollingFrame", {
-        ScrollingDirection = Enum.ScrollingDirection.X;
-        CanvasSize = UDim2.new(1, 0, 1, 0);
-        HorizontalScrollBarInset = Enum.ScrollBarInset.Always;
-        AutomaticCanvasSize = Enum.AutomaticSize.None;
-        ScrollBarThickness = 0;
+    -- The tabs share the width equally (see SizeTabButtons), so nothing scrolls. A plain
+    -- frame: a ScrollingFrame's canvas would scale the buttons off its parent instead.
+    local TabArea = Library:Create("Frame", {
+        ClipsDescendants = true;
         BackgroundTransparency = 1;
         Position = UDim2.new(0, 8, 0, 4);
         Size = UDim2.new(1, -16, 0, 26);
