@@ -6253,6 +6253,48 @@ do
         Parent = InnerFrame;
     })
 
+    -- A bar along the top with a gradient running across it. The colours go round in a
+    -- loop (1 -> 2 -> 3 -> 1), and the loop slides along the bar at Speed turns a second.
+    local GradientBar = Library:Create("Frame", {
+        BackgroundColor3 = Color3.new(1, 1, 1);
+        BorderSizePixel = 0;
+        Size = UDim2.new(1, 0, 0, 2);
+        ZIndex = 204;
+        Parent = InnerFrame;
+    })
+
+    local BarGradient = Library:Create("UIGradient", {
+        Parent = GradientBar;
+    })
+
+    -- Colors: three Color3s, or nil for shades of the accent colour
+    Library.WatermarkGradient = { Colors = nil; Speed = 0.5; }
+
+    local function LoopColor(Colors, Phase)
+        local Scaled = (Phase % 1) * 3
+        local Index = math.floor(Scaled)
+
+        return Colors[Index + 1]:Lerp(Colors[(Index + 1) % 3 + 1], Scaled - Index)
+    end
+
+    Library:GiveSignal(RunService.RenderStepped:Connect(function()
+        if not WatermarkOuter.Visible then
+            return
+        end
+
+        local Settings = Library.WatermarkGradient
+        local Colors = Settings.Colors
+            or { Library.AccentColor, Shade(Library.AccentColor, -110), Library:GetDarkerColor(Library.AccentColor) }
+        local Phase = -tick() * (Settings.Speed or 0)
+        local Keypoints = {}
+
+        for Step = 0, 8 do
+            table.insert(Keypoints, ColorSequenceKeypoint.new(Step / 8, LoopColor(Colors, Phase + Step / 8)))
+        end
+
+        BarGradient.Color = ColorSequence.new(Keypoints)
+    end))
+
     Library.Watermark = WatermarkOuter
     Library.WatermarkText = WatermarkLabel
     Library:MakeDraggable(Library.Watermark)
