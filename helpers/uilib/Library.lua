@@ -6248,6 +6248,7 @@ do
         Size = UDim2.new(1, -9, 1, 0);
         TextSize = 18;
         TextXAlignment = Enum.TextXAlignment.Left;
+        RichText = true; -- so parts of it can be coloured, like the fps and ping
         ZIndex = 203;
         Parent = InnerFrame;
     })
