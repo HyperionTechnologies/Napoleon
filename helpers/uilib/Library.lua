@@ -2951,8 +2951,9 @@ do
                         Selected = Dropdown.Value == Value
                     end
 
-                    ButtonLabel.TextColor3 = Selected and Library.AccentColor or (IsDisabled and Library.DisabledAccentColor or Library.FontColor)
-                    Library.RegistryMap[ButtonLabel].Properties.TextColor3 = Selected and "AccentColor" or (IsDisabled and "DisabledAccentColor" or "FontColor")
+                    -- Grey while unselected (like an off bind in the keybind list), accent colour when selected
+                    ButtonLabel.TextColor3 = Selected and Library.AccentColor or (IsDisabled and Library.DisabledAccentColor or Library.SubTextColor)
+                    Library.RegistryMap[ButtonLabel].Properties.TextColor3 = Selected and "AccentColor" or (IsDisabled and "DisabledAccentColor" or "SubTextColor")
                 end
 
                 if not IsDisabled then
@@ -4963,8 +4964,9 @@ do
                         Selected = Dropdown.Value == Value
                     end
 
-                    ButtonLabel.TextColor3 = Selected and Library.AccentColor or (IsDisabled and Library.DisabledAccentColor or Library.FontColor)
-                    Library.RegistryMap[ButtonLabel].Properties.TextColor3 = Selected and "AccentColor" or (IsDisabled and "DisabledAccentColor" or "FontColor")
+                    -- Grey while unselected (like an off bind in the keybind list), accent colour when selected
+                    ButtonLabel.TextColor3 = Selected and Library.AccentColor or (IsDisabled and Library.DisabledAccentColor or Library.SubTextColor)
+                    Library.RegistryMap[ButtonLabel].Properties.TextColor3 = Selected and "AccentColor" or (IsDisabled and "DisabledAccentColor" or "SubTextColor")
                 end
 
                 if not IsDisabled then
