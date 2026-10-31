@@ -475,9 +475,38 @@ local Library = {
 		Skeleton = true,
 		HealthBars = true,
 
-		Font = Enum.Font.RobotoCondensed
+		Font = Enum.Font.RobotoCondensed,
+
+		-- Not in stock. A turning gradient on the boxes, arrows and text, like the
+		-- FOV circles: { Enabled, Colors = { start, middle, end }, Speed = turns a second }
+		Gradient = nil,
 	}
 }
+
+-- // Gradient // --
+-- A UIGradient multiplies whatever colour it sits on, so while one is showing, the
+-- thing under it goes white (Plain) and the gradient's own colours are what you see.
+local Plain = Color3.new(1, 1, 1)
+
+local function ApplyGradient(Gradient: UIGradient): boolean
+	local Config = Library.GlobalConfig.Gradient
+	local Colors = Config and Config.Enabled == true and Config.Colors
+
+	if not (Colors and #Colors >= 3) then
+		if Gradient.Enabled then Gradient.Enabled = false end
+		return false
+	end
+
+	Gradient.Enabled = true
+	Gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Colors[1]),
+		ColorSequenceKeypoint.new(0.5, Colors[2]),
+		ColorSequenceKeypoint.new(1, Colors[3]),
+	})
+	Gradient.Rotation = (os.clock() * (Config.Speed or 1) * 360) % 360
+
+	return true
+end
 
 function Library:Clear()
 	if Library.Destroyed == true then
@@ -663,10 +692,18 @@ local Components = {}; do
 			})
 		end
 
+		local function AddGradient(Label)
+			return InstancesLib.Create("UIGradient", { Parent = Label, Enabled = false })
+		end
+
 		-- anchor 1 = grows upward from the given Y, anchor 0 = downward
 		local NameLabel = CreateLabel(1)
 		local DistanceLabel = CreateLabel(0)
 		local WeaponLabel = CreateLabel(0)
+
+		local NameGradient = AddGradient(NameLabel)
+		local DistanceGradient = AddGradient(DistanceLabel)
+		local WeaponGradient = AddGradient(WeaponLabel)
 
 		local LastName, LastMeters, LastWeapon
 
@@ -700,7 +737,11 @@ local Components = {}; do
 
 			local centerX = (ESP._MinX + ESP._MaxX) * 0.5
 			local gap = Library.GlobalConfig.TextGap or 2
-			local color = ESPSettings.Color
+			local gradient = ApplyGradient(NameGradient)
+			ApplyGradient(DistanceGradient)
+			ApplyGradient(WeaponGradient)
+
+			local color = if gradient then Plain else ESPSettings.Color
 			local font = Library.GlobalConfig.Font
 			local small = math.max(ESPSettings.TextSize - 3, 1)
 
@@ -979,6 +1020,8 @@ local Components = {}; do
 			ImageColor3 = ESP.CurrentSettings.Color or Color3.new(),
 		});
 
+		local ArrowGradient = InstancesLib.Create("UIGradient", { Parent = Arrow, Enabled = false })
+
 		-- // Arrow Data // --
 		local ArrowData = { }
 		ArrowData.Destroy = function(self)
@@ -1027,7 +1070,7 @@ local Components = {}; do
 			);
 
 			-- // Update Visuals // --
-			Arrow.ImageColor3 = ESPSettings.Arrow.Color;
+			Arrow.ImageColor3 = if ApplyGradient(ArrowGradient) then Plain else ESPSettings.Arrow.Color;
 		end;
 
 		return setmetatable({}, {
@@ -1101,6 +1144,9 @@ local Components = {}; do
 			Transparency = ESP.CurrentSettings.Box2D.Transparency,
 		})
 
+		local StrokeGradient = InstancesLib.Create("UIGradient", { Parent = UIStroke, Enabled = false })
+		local FillGradient = InstancesLib.Create("UIGradient", { Parent = Frame, Enabled = false })
+
 		-- // Corner brackets // --
 		-- Eight frames parented to the box, so they move and resize with it and the
 		-- bounds only have to be worked out in one place. Two arms per corner; the
@@ -1118,6 +1164,7 @@ local Components = {}; do
 		}
 
 		local Arms = {}
+		local ArmGradients = {}
 
 		for Index, Spec in ipairs(ArmSpec) do
 			Arms[Index] = InstancesLib.Create("Frame", {
@@ -1133,6 +1180,8 @@ local Components = {}; do
 				Visible = false,
 				ZIndex = 3,
 			})
+
+			ArmGradients[Index] = InstancesLib.Create("UIGradient", { Parent = Arms[Index], Enabled = false })
 		end
 
 		-- // Box2D Data // --
@@ -1176,8 +1225,13 @@ local Components = {}; do
 			local corner = ESPSettings.Box2D.Corner == true
 			local transparency = ESPSettings.Box2D.Transparency or 0
 
-			Frame.BackgroundColor3 = ESPSettings.Box2D.Color;
-			UIStroke.Color = ESPSettings.Box2D.Color;
+			local gradient = ApplyGradient(StrokeGradient)
+			ApplyGradient(FillGradient)
+
+			local boxColor = if gradient then Plain else ESPSettings.Box2D.Color
+
+			Frame.BackgroundColor3 = boxColor;
+			UIStroke.Color = boxColor;
 			UIStroke.Thickness = ESPSettings.Box2D.Thickness;
 
 			-- The stroke is the closed rectangle, so corner mode is it stepping aside
@@ -1206,7 +1260,8 @@ local Components = {}; do
 				local Arm = Arms[Index]
 
 				Arm.Visible = true
-				Arm.BackgroundColor3 = ESPSettings.Box2D.Color
+				ApplyGradient(ArmGradients[Index])
+				Arm.BackgroundColor3 = boxColor
 				Arm.BackgroundTransparency = transparency
 				Arm.Size = if Spec.Across
 					then UDim2.fromOffset(armX, thickness)
