@@ -421,7 +421,7 @@ local ActiveFolder = InstancesLib.Create("Folder", {
 		IgnoreGuiInset = true,
 		ResetOnSpawn = false,
 		ClipToDeviceSafeArea = false,
-		DisplayOrder = 999999
+		DisplayOrder = 10 -- under the menu (999), like the FOV circles
 	}),
 	Name = RandomString("ActiveFolder")
 })
@@ -432,7 +432,7 @@ local MainGUI = InstancesLib.Create("ScreenGui", {
 	IgnoreGuiInset = true,
 	ResetOnSpawn = false,
 	ClipToDeviceSafeArea = false,
-	DisplayOrder = 999999
+	DisplayOrder = 10 -- under the menu (999), like the FOV circles
 })
 
 local BillboardGUI = InstancesLib.Create("ScreenGui", {
@@ -441,7 +441,7 @@ local BillboardGUI = InstancesLib.Create("ScreenGui", {
 	IgnoreGuiInset = true,
 	ResetOnSpawn = false,
 	ClipToDeviceSafeArea = false,
-	DisplayOrder = 999999
+	DisplayOrder = 10 -- under the menu (999), like the FOV circles
 })
 
 -- // Library // --
