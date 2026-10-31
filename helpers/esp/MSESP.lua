@@ -460,6 +460,9 @@ local Library = {
 	-- // ESP // --
 	ESP = {},
 
+	-- Counts RenderSteps, so per-frame work (the gradient) is done once a frame
+	Frame = 0,
+
 	-- // Global Config // --
 	GlobalConfig = {
 		IgnoreCharacter = false,
@@ -488,22 +491,59 @@ local Library = {
 -- thing under it goes white (Plain) and the gradient's own colours are what you see.
 local Plain = Color3.new(1, 1, 1)
 
-local function ApplyGradient(Gradient: UIGradient): boolean
+-- One sequence and one rotation per frame, shared by every gradient, instead of a new
+-- ColorSequence for each of the dozen-odd gradients on every ESP. Each gradient also
+-- remembers what it was last given, so an unchanged colour isn't written again.
+local GradientFrame = { Clock = -1, Config = nil, Key = nil, Sequence = nil, Rotation = 0 }
+local GradientSeen = setmetatable({}, { __mode = "k" })
+
+local function GradientState()
 	local Config = Library.GlobalConfig.Gradient
 	local Colors = Config and Config.Enabled == true and Config.Colors
 
 	if not (Colors and #Colors >= 3) then
+		return nil
+	end
+
+	-- Library.Frame goes up once per RenderStepped, in the main handler at the bottom
+	if GradientFrame.Clock ~= Library.Frame or GradientFrame.Config ~= Config then
+		local Now = os.clock()
+		GradientFrame.Clock = Library.Frame
+		GradientFrame.Config = Config
+
+		local Key = tostring(Colors[1]) .. tostring(Colors[2]) .. tostring(Colors[3])
+
+		if Key ~= GradientFrame.Key then
+			GradientFrame.Key = Key
+			GradientFrame.Sequence = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Colors[1]),
+				ColorSequenceKeypoint.new(0.5, Colors[2]),
+				ColorSequenceKeypoint.new(1, Colors[3]),
+			})
+		end
+
+		GradientFrame.Rotation = (Now * (Config.Speed or 1) * 360) % 360
+	end
+
+	return GradientFrame
+end
+
+local function ApplyGradient(Gradient: UIGradient): boolean
+	local State = GradientState()
+
+	if not State then
 		if Gradient.Enabled then Gradient.Enabled = false end
 		return false
 	end
 
-	Gradient.Enabled = true
-	Gradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Colors[1]),
-		ColorSequenceKeypoint.new(0.5, Colors[2]),
-		ColorSequenceKeypoint.new(1, Colors[3]),
-	})
-	Gradient.Rotation = (os.clock() * (Config.Speed or 1) * 360) % 360
+	if not Gradient.Enabled then Gradient.Enabled = true end
+
+	if GradientSeen[Gradient] ~= State.Sequence then
+		GradientSeen[Gradient] = State.Sequence
+		Gradient.Color = State.Sequence
+	end
+
+	Gradient.Rotation = State.Rotation
 
 	return true
 end
@@ -1166,6 +1206,10 @@ local Components = {}; do
 		local Arms = {}
 		local ArmGradients = {}
 
+		-- What was last written to the box, so a frame only touches what changed. With
+		-- corner mode that is nine frames a player, and most of it never changes.
+		local Last = {}
+
 		for Index, Spec in ipairs(ArmSpec) do
 			Arms[Index] = InstancesLib.Create("Frame", {
 				Parent = Frame,
@@ -1203,14 +1247,11 @@ local Components = {}; do
 			local _, isOnScreen = unpack(ESP._LastScreenPos);
 			local Box2DEnabled = isOnScreen == true and (Library.GlobalConfig.Boxes2D == true and ESPSettings.Box2D.Enabled == true);
 
-			Frame.Visible = Box2DEnabled
-			if not Box2DEnabled then return end
-
 			-- // Corners // --
 			-- Worked out once per frame in ESP:Render and shared with the text and
 			-- the health bar. This used to call GetModelCorners itself.
-			if ESP._BoundsOK ~= true then
-				Frame.Visible = false
+			if not Box2DEnabled or ESP._BoundsOK ~= true then
+				if Frame.Visible then Frame.Visible = false end
 				return
 			end
 
@@ -1219,7 +1260,7 @@ local Components = {}; do
 			-- // Update Position // --
 			Frame.Position = UDim2.fromOffset(minX, minY)
 			Frame.Size = UDim2.fromOffset(maxX - minX, maxY - minY)
-			Frame.Visible = true
+			if not Frame.Visible then Frame.Visible = true end
 			
 			-- // Update Visuals // --
 			local corner = ESPSettings.Box2D.Corner == true
@@ -1229,21 +1270,44 @@ local Components = {}; do
 			ApplyGradient(FillGradient)
 
 			local boxColor = if gradient then Plain else ESPSettings.Box2D.Color
-
-			Frame.BackgroundColor3 = boxColor;
-			UIStroke.Color = boxColor;
-			UIStroke.Thickness = ESPSettings.Box2D.Thickness;
-
+			local strokeThickness = ESPSettings.Box2D.Thickness
 			-- The stroke is the closed rectangle, so corner mode is it stepping aside
 			-- for the arms. Filled still works either way - that is the frame itself.
-			UIStroke.Transparency = if corner then 1 else transparency;
-			Frame.BackgroundTransparency = if ESPSettings.Box2D.Filled then 0.5 else 1;
+			local strokeTransparency = if corner then 1 else transparency
+			local fillTransparency = if ESPSettings.Box2D.Filled then 0.5 else 1
+
+			if Last.Color ~= boxColor then
+				Frame.BackgroundColor3 = boxColor
+				UIStroke.Color = boxColor
+			end
+
+			if Last.Thickness ~= strokeThickness then
+				UIStroke.Thickness = strokeThickness
+			end
+
+			if Last.StrokeTransparency ~= strokeTransparency then
+				UIStroke.Transparency = strokeTransparency
+			end
+
+			if Last.FillTransparency ~= fillTransparency then
+				Frame.BackgroundTransparency = fillTransparency
+			end
 
 			if not corner then
-				for _, Arm in ipairs(Arms) do
-					if Arm.Visible then Arm.Visible = false end
+				if Last.Corner ~= false then
+					for _, Arm in ipairs(Arms) do
+						Arm.Visible = false
+					end
+
+					-- dropping the gradients too, so turning corner mode off doesn't leave
+					-- them being rotated for frames nobody sees
+					for _, ArmGradient in ipairs(ArmGradients) do
+						ArmGradient.Enabled = false
+					end
 				end
 
+				Last.Color, Last.Thickness, Last.Corner = boxColor, strokeThickness, false
+				Last.StrokeTransparency, Last.FillTransparency = strokeTransparency, fillTransparency
 				return
 			end
 
@@ -1253,20 +1317,40 @@ local Components = {}; do
 			-- brackets quietly become the closed box they were meant to replace
 			local fraction = math.clamp(ESPSettings.Box2D.CornerSize or 0.25, 0.05, 0.5)
 
-			local armX = math.max((maxX - minX) * fraction, thickness)
-			local armY = math.max((maxY - minY) * fraction, thickness)
+			-- The arms are sized as a fraction of the box they sit in, so they follow it
+			-- as it moves and resizes without being written to. Writing eight sizes a
+			-- player every frame was most of what corner mode cost.
+			local resize = Last.Fraction ~= fraction or Last.ArmThickness ~= thickness
+			local across = UDim2.new(fraction, 0, 0, thickness)
+			local down = UDim2.new(0, thickness, fraction, 0)
+
+			local restyle = Last.Corner ~= true
+				or Last.Color ~= boxColor
+				or Last.ArmTransparency ~= transparency
 
 			for Index, Spec in ipairs(ArmSpec) do
 				local Arm = Arms[Index]
 
-				Arm.Visible = true
-				ApplyGradient(ArmGradients[Index])
-				Arm.BackgroundColor3 = boxColor
-				Arm.BackgroundTransparency = transparency
-				Arm.Size = if Spec.Across
-					then UDim2.fromOffset(armX, thickness)
-					else UDim2.fromOffset(thickness, armY)
+				if restyle then
+					Arm.Visible = true
+					Arm.BackgroundColor3 = boxColor
+					Arm.BackgroundTransparency = transparency
+				end
+
+				if gradient then
+					ApplyGradient(ArmGradients[Index])
+				elseif restyle then
+					ArmGradients[Index].Enabled = false
+				end
+
+				if resize then
+					Arm.Size = if Spec.Across then across else down
+				end
 			end
+
+			Last.Color, Last.Thickness, Last.Corner = boxColor, strokeThickness, true
+			Last.StrokeTransparency, Last.FillTransparency = strokeTransparency, fillTransparency
+			Last.ArmTransparency, Last.Fraction, Last.ArmThickness = transparency, fraction, thickness
 		end;
 
 		return setmetatable({}, {
@@ -1418,6 +1502,8 @@ local Components = {}; do
 		-- // Skeleton Data // --
 		local SkeletonData = {}
 		local CachedParts = {}
+		local LastColor, LastThickness, LastTransparency
+		local FramePoints = {} -- part name -> this frame's control point
 
 		local function SetVisible(visible: boolean)
 			if not SkeletonPath then return end
@@ -1453,29 +1539,37 @@ local Components = {}; do
 			end
 
 			-- // Build Path from Joints // --
+			-- The path is one line that doubles back, so R15 visits 15 parts across 25
+			-- points. Each part is projected once and its point reused for the repeats.
 			local ControlPoints = {}
 			local pointsMade = 0
+			table.clear(FramePoints)
 
 			for idx, partName in Sequence do
-				local part = CachedParts[partName]
-				if not part then
-					part = Model:FindFirstChild(partName)
-					CachedParts[partName] = part
+				local point = FramePoints[partName]
 
-					if not part then 
-						partName = 0
+				if not point then
+					local part = CachedParts[partName]
+					if not part then
+						part = Model:FindFirstChild(partName)
+						CachedParts[partName] = part
+
+						if not part then
+							break
+						end
+					end
+
+					local pos, visible = WorldToViewport(part.Position)
+					if not visible then
 						break
 					end
+
+					point = Path2DControlPoint.new(UDim2.fromOffset(pos.X, pos.Y))
+					FramePoints[partName] = point
 				end
 
-				local pos, visible = WorldToViewport(part.Position)
-				if not visible then
-					partName = 0
-					break
-				end
-
-				ControlPoints[idx] = Path2DControlPoint.new(UDim2.fromOffset(pos.X, pos.Y))
-				pointsMade = pointsMade + 1 
+				ControlPoints[idx] = point
+				pointsMade = pointsMade + 1
 			end
 
 			if pointsMade == 0 then
@@ -1485,11 +1579,21 @@ local Components = {}; do
 
 			-- // Update Visuals // --
 			SetVisible(true);
-			SkeletonPath.Color3 = ESPSettings.Skeleton.Color;
-			SkeletonPath.Thickness = ESPSettings.Skeleton.Thickness;
-			
-			if CoreGuiAllowed then
-				SkeletonPath.Transparency = ESPSettings.Skeleton.Transparency;
+
+			-- only on a change; the points below are the one thing that moves every frame
+			if LastColor ~= ESPSettings.Skeleton.Color then
+				LastColor = ESPSettings.Skeleton.Color
+				SkeletonPath.Color3 = LastColor
+			end
+
+			if LastThickness ~= ESPSettings.Skeleton.Thickness then
+				LastThickness = ESPSettings.Skeleton.Thickness
+				SkeletonPath.Thickness = LastThickness
+			end
+
+			if CoreGuiAllowed and LastTransparency ~= ESPSettings.Skeleton.Transparency then
+				LastTransparency = ESPSettings.Skeleton.Transparency
+				SkeletonPath.Transparency = LastTransparency
 			end;
 
 			-- // Update Points // --
@@ -1794,6 +1898,8 @@ table.insert(Library.Connections, Players.LocalPlayer.CharacterAdded:Connect(Upd
 
 -- // Main Handler // --
 table.insert(Library.Connections, RunService.RenderStepped:Connect(function()
+	Library.Frame += 1
+
 	for Index, ESP in Library.ESP do
 		if not ESP then 
 			Library.ESP[Index] = nil
