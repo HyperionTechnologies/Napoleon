@@ -1443,6 +1443,12 @@ do
                 KeybindsToggleLabel.Text = Text
             end
 
+            -- The label's colour by theme name, so it follows theme changes
+            function KeybindsToggle:SetColor(ColorName)
+                KeybindsToggleLabel.TextColor3 = Library[ColorName]
+                Library.RegistryMap[KeybindsToggleLabel].Properties.TextColor3 = ColorName
+            end
+
             function KeybindsToggle:SetVisibility(bool)
                 KeybindsToggleContainer.Visible = bool
             end
@@ -1622,16 +1628,17 @@ do
                 ParentObj:SetValue(State)
             end
 
-            -- Listed only while it's doing something: its key is active and, on a toggle,
-            -- the toggle itself is on
+            -- Every bind is listed: grey while it's off, the accent colour while it's doing
+            -- something (its key is active and, on a toggle, the toggle itself is on)
             local Active = State and (ParentObj.Type ~= "Toggle" or ParentObj.Value == true)
 
             if KeybindsToggle.Loaded then
                 KeybindsToggle:SetNormal(true)
 
-                KeybindsToggle:SetVisibility(Active)
-                KeybindsToggle:SetText(string.format("%s - %s - %s", tostring(KeyPicker.DisplayValue), Info.Text, KeyPicker.Mode))
+                KeybindsToggle:SetVisibility(true)
+                KeybindsToggle:SetText(string.format("[%s] %s (%s)", tostring(KeyPicker.DisplayValue), Info.Text, KeyPicker.Mode))
                 KeybindsToggle:Display(false)
+                KeybindsToggle:SetColor(Active and "AccentColor" or "SubTextColor")
             end
 
             local YSize = 0
@@ -4152,6 +4159,9 @@ do
                 if Addon.Type == "KeyPicker" and Addon.SyncToggleState then
                     Addon.Toggled = Bool
                     Addon:Update()
+                elseif Addon.Type == "KeyPicker" then
+                    -- Its line in the keybind list goes grey or lit with the toggle
+                    Addon:Update()
                 end
             end
 
@@ -6234,9 +6244,9 @@ do
     })
 
     local WatermarkLabel = Library:CreateLabel({
-        Position = UDim2.new(0, 7, 0, 0);
-        Size = UDim2.new(1, -7, 1, 0);
-        TextSize = 14;
+        Position = UDim2.new(0, 9, 0, 0);
+        Size = UDim2.new(1, -9, 1, 0);
+        TextSize = 18;
         TextXAlignment = Enum.TextXAlignment.Left;
         ZIndex = 203;
         Parent = InnerFrame;
@@ -6251,8 +6261,8 @@ do
     end
 
     function Library:SetWatermark(Text)
-        local X = Library:GetTextBounds(Text, Library.Font, ApplyTextScale(14))
-        Library.Watermark.Size = UDim2.new(0, X + 18, 0, 24)
+        local X = Library:GetTextBounds(Text, Library.Font, ApplyTextScale(18))
+        Library.Watermark.Size = UDim2.new(0, X + 22, 0, 30)
         Library:SetWatermarkVisibility(true)
 
         Library.WatermarkText.Text = Text
@@ -6597,11 +6607,11 @@ function Library:CreateWindow(...)
     })
 
     local WindowLabel = Library:CreateLabel({
-        Position = UDim2.new(0, 9, 0, 0);
-        Size = UDim2.new(0, 0, 0, 25);
+        Position = UDim2.new(0, 0, 0, 0);
+        Size = UDim2.new(1, 0, 0, 25);
         TextSize = 15;
         Text = WindowInfo.Title or "";
-        TextXAlignment = Enum.TextXAlignment.Left;
+        TextXAlignment = Enum.TextXAlignment.Center;
         ZIndex = 1;
         Parent = Inner;
     })
