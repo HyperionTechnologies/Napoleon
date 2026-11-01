@@ -7354,6 +7354,11 @@ function Library:CreateWindow(...)
             BackgroundColor3 = "AccentColor";
         })
 
+        -- Whether it shows depends on which tab is selected, so the menu fade reads this
+        -- instead of the transparency it cached the first time the menu closed
+        Blocker:SetAttribute("TabBlocker", true)
+        Blocker:SetAttribute("Selected", false)
+
         local TabFrame = Library:Create("Frame", {
             Name = "TabFrame",
             BackgroundTransparency = 1;
@@ -7693,6 +7698,7 @@ end
             end
 
             Blocker.BackgroundTransparency = 0
+            Blocker:SetAttribute("Selected", true)
             TabButton.BackgroundColor3 = Shade(Library.BackgroundColor, -5)
             Library.RegistryMap[TabButton].Properties.BackgroundColor3 = function()
                 return Shade(Library.BackgroundColor, -5)
@@ -7707,6 +7713,7 @@ end
 
         function Tab:HideTab()
             Blocker.BackgroundTransparency = 1
+            Blocker:SetAttribute("Selected", false)
             TabButton.BackgroundColor3 = Library.MainColor
             Library.RegistryMap[TabButton].Properties.BackgroundColor3 = "MainColor"
             TabButtonLabel.TextColor3 = Library.SubTextColor
@@ -8142,6 +8149,13 @@ end
 
         for _, Desc in next, Outer:GetDescendants() do
             local Properties = {}
+
+            -- A tab's selected line fades back in only on the tab that's selected now
+            if Desc:GetAttribute("TabBlocker") then
+                local Target = (Toggled and Desc:GetAttribute("Selected")) and 0 or 1
+                TweenService:Create(Desc, TweenInfo.new(FadeTime, Enum.EasingStyle.Linear), { BackgroundTransparency = Target }):Play()
+                continue
+            end
 
             if Desc:IsA("ImageLabel") then
                 table.insert(Properties, "ImageTransparency")
