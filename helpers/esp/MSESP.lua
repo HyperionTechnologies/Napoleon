@@ -627,6 +627,25 @@ local function GetModelCorners(Model: Instance?)
 		return false, {}, {}, 0, 0, 0, 0;
 	end
 
+	-- // Characters: static, upright, camera-facing box // --
+	-- GetBoundingBox spans every descendant part, so anything stray in the model
+	-- (desynced parts, ragebot angles, tilted roots) blew the box up. Characters
+	-- instead get a fixed-size box built from the root's position only.
+	local Root = Model:IsA("Model") and Model:FindFirstChild("HumanoidRootPart")
+	if Root and Root:IsA("BasePart") then
+		local Position = Root.Position
+		local TopPos, TopOn = WorldToViewport(Position + Vector3.new(0, 2.75, 0))
+		local BottomPos, BottomOn = WorldToViewport(Position - Vector3.new(0, 3, 0))
+		if not (TopOn or BottomOn) then
+			return false, {}, {}, 0, 0, 0, 0
+		end
+
+		local Height = math.abs(BottomPos.Y - TopPos.Y)
+		local HalfWidth = Height * 0.35
+		local CenterX = (TopPos.X + BottomPos.X) / 2
+		return true, {}, {}, CenterX - HalfWidth, math.min(TopPos.Y, BottomPos.Y), CenterX + HalfWidth, math.max(TopPos.Y, BottomPos.Y)
+	end
+
 	-- // Calculate Bounding Box // --
 	local ModelCFrame, ModelSize = nil, nil
 
@@ -1840,7 +1859,9 @@ function Library:Add(espSettings: ESPSettings)
 		end
 
 		local ModelRoot = ESPSettings.ModelRoot or ESPSettings.Model
-		local DistanceFromPlayer = InstancesLib.DistanceFrom(ModelRoot, RootPart or Camera)
+		-- Measured from the camera: the ragebot moves our own root far away, so
+		-- RootPart gave distances like 1,600,000 m
+		local DistanceFromPlayer = InstancesLib.DistanceFrom(ModelRoot, Camera.CFrame.Position)
 		ESP._LastDistance = DistanceFromPlayer
 
 		if DistanceFromPlayer > ESPSettings.MaxDistance then
