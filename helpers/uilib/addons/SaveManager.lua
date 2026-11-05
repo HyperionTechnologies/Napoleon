@@ -105,6 +105,17 @@ local SaveManager = {} do
                 end
             end,
         },
+        PriorityList = {
+            Save = function(idx, object)
+                return { type = 'PriorityList', idx = idx, value = table.clone(object.Value) }
+            end,
+            Load = function(idx, data)
+                local object = SaveManager.Library.Options[idx]
+                if object and type(data.value) == 'table' then
+                    object:SetValue(data.value)
+                end
+            end,
+        },
         Input = {
             Save = function(idx, object)
                 return { type = 'Input', idx = idx, text = object.Value }

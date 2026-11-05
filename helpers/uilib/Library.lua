@@ -1161,6 +1161,11 @@ local Templates = { -- TO-DO: do it for missing elements.
         Instance = nil,
         Height = 24,
         Visible = true,
+    },
+    PriorityList = {
+        Values = {},
+        Visible = true,
+        Callback = function() end,
     }
 }
 
@@ -5934,6 +5939,190 @@ do
         return Passthrough
     end
 
+    -- A numbered list whose order is the value, reordered with the arrows on each row
+    function BaseGroupboxFuncs:AddPriorityList(Idx, Info)
+        Info = Library:Validate(Info, Templates.PriorityList)
+
+        local Blank = nil
+        local Groupbox = self
+        local Container = Groupbox.Container
+
+        assert(typeof(Info.Values) == "table" and #Info.Values > 0, "Values must be a non-empty list.")
+
+        local PriorityList = {
+            Values = table.clone(Info.Values),
+            Value = table.clone(Info.Default or Info.Values),
+            Visible = Info.Visible,
+            Callback = Info.Callback,
+
+            Type = "PriorityList",
+        }
+
+        local Count = #PriorityList.Values
+        local RowHeight = 22 * DPIScale
+
+        local Holder = Library:Create("Frame", {
+            BackgroundColor3 = Library.BackgroundColor;
+            BorderColor3 = Library.OutlineColor;
+            BorderMode = Enum.BorderMode.Inset;
+            Size = UDim2.new(1, -4, 0, RowHeight * Count + 6);
+            Visible = PriorityList.Visible;
+            ZIndex = 5;
+            Parent = Container;
+        })
+
+        Library:AddToRegistry(Holder, {
+            BackgroundColor3 = "BackgroundColor";
+            BorderColor3 = "OutlineColor";
+        })
+
+        local function IsOrder(Value)
+            if typeof(Value) ~= "table" or #Value ~= Count then
+                return false
+            end
+
+            for _, Item in next, PriorityList.Values do
+                if not table.find(Value, Item) then
+                    return false
+                end
+            end
+
+            return true
+        end
+
+        local Rows = {}
+
+        local function Arrow(Text, Row, Right)
+            local Button = Library:Create("TextButton", {
+                AnchorPoint = Vector2.new(1, 0.5);
+                AutoButtonColor = false;
+                BackgroundTransparency = 1;
+                Font = Library.Font;
+                Position = UDim2.new(1, Right, 0.5, 0);
+                Size = UDim2.fromOffset(18 * DPIScale, 18 * DPIScale);
+                Text = Text;
+                TextColor3 = Library.FontColor;
+                TextSize = 12;
+                ZIndex = 7;
+                Parent = Row;
+            })
+
+            Library:AddToRegistry(Button, {
+                TextColor3 = "FontColor";
+            })
+
+            return Button
+        end
+
+        function PriorityList:Display()
+            for Index, Row in next, Rows do
+                Row.Name.Text = tostring(PriorityList.Value[Index])
+                Row.Up.TextTransparency = Index == 1 and 0.75 or 0
+                Row.Down.TextTransparency = Index == Count and 0.75 or 0
+            end
+        end
+
+        function PriorityList:OnChanged(Func)
+            PriorityList.Changed = Func
+        end
+
+        function PriorityList:SetValue(Value)
+            if not IsOrder(Value) then
+                return
+            end
+
+            PriorityList.Value = table.clone(Value)
+            PriorityList:Display()
+
+            Library:SafeCallback(PriorityList.Callback, PriorityList.Value)
+            Library:SafeCallback(PriorityList.Changed, PriorityList.Value)
+        end
+
+        function PriorityList:Move(From, To)
+            if To < 1 or To > Count then
+                return
+            end
+
+            local Order = table.clone(PriorityList.Value)
+            Order[From], Order[To] = Order[To], Order[From]
+            PriorityList:SetValue(Order)
+        end
+
+        function PriorityList:SetVisible(Visible: boolean)
+            PriorityList.Visible = Visible
+
+            Holder.Visible = PriorityList.Visible
+            if Blank then Blank.Visible = PriorityList.Visible end
+
+            Groupbox:Resize()
+        end
+
+        for Index = 1, Count do
+            local Row = Library:Create("Frame", {
+                BackgroundTransparency = 1;
+                Position = UDim2.fromOffset(0, 3 + (Index - 1) * RowHeight);
+                Size = UDim2.new(1, 0, 0, RowHeight);
+                ZIndex = 6;
+                Parent = Holder;
+            })
+
+            Library:CreateLabel({
+                Position = UDim2.fromOffset(10, 0);
+                Size = UDim2.new(0, 14, 1, 0);
+                Text = tostring(Index);
+                TextSize = 15;
+                TextTransparency = 0.45;
+                TextXAlignment = Enum.TextXAlignment.Left;
+                ZIndex = 7;
+                Parent = Row;
+            })
+
+            local Name = Library:CreateLabel({
+                Position = UDim2.fromOffset(30, 0);
+                Size = UDim2.new(1, -80, 1, 0);
+                Text = "";
+                TextSize = 12;
+                TextTransparency = 0.45;
+                TextXAlignment = Enum.TextXAlignment.Left;
+                ZIndex = 7;
+                Parent = Row;
+            })
+
+            local Up = Arrow("▲", Row, -28)
+            local Down = Arrow("▼", Row, -8)
+
+            Up.Activated:Connect(function()
+                PriorityList:Move(Index, Index - 1)
+            end)
+
+            Down.Activated:Connect(function()
+                PriorityList:Move(Index, Index + 1)
+            end)
+
+            Rows[Index] = { Name = Name, Up = Up, Down = Down }
+        end
+
+        if not IsOrder(PriorityList.Value) then
+            PriorityList.Value = table.clone(PriorityList.Values)
+        end
+
+        PriorityList:Display()
+
+        Blank = Groupbox:AddBlank(5, PriorityList.Visible)
+        Groupbox:Resize()
+
+        PriorityList.Holder = Holder
+        PriorityList.Container = Container
+
+        table.insert(Groupbox.Elements, PriorityList)
+        Options[Idx] = PriorityList
+
+        Library:UpdateDependencyBoxes()
+        Library:UpdateDependencyGroupboxes()
+
+        return PriorityList
+    end
+
     function BaseGroupboxFuncs:AddDependencyBox()
         local Depbox = {
             Elements = {};
@@ -6705,25 +6894,6 @@ function Library:CreateWindow(...)
         FillDirection = Enum.FillDirection.Horizontal;
         SortOrder = Enum.SortOrder.LayoutOrder;
         VerticalAlignment = Enum.VerticalAlignment.Center;
-        Parent = TabArea;
-    })
-
-    Library:Create("Frame", {
-        BackgroundColor3 = Library.BackgroundColor;
-        BorderColor3 = Library.OutlineColor;
-        Size = UDim2.new(0, 0, 0, 0);
-        LayoutOrder = -1;
-        BackgroundTransparency = 1;
-        ZIndex = 1;
-        Parent = TabArea;
-    })
-    Library:Create("Frame", {
-        BackgroundColor3 = Library.BackgroundColor;
-        BorderColor3 = Library.OutlineColor;
-        Size = UDim2.new(0, 0, 0, 0);
-        LayoutOrder = 9999999;
-        BackgroundTransparency = 1;
-        ZIndex = 1;
         Parent = TabArea;
     })
 
